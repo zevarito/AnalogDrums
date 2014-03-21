@@ -1,0 +1,5 @@
+# Arduino Sketch for Analog Input To Serial MIDI Output
+
+The particular case of this Sketch is to be able to handle input data
+coming from Piezo Electric components connected to Arduino analog inputs
+and convert it into valid MIDI messages goind out through Serial port.
