@@ -1,46 +1,145 @@
 
+#define DEBUG 0
 
-int outPin = 13;
-int analogPin = 0;
+// Output serial communication rate
+#define BAUD_RATE 115200
 
-unsigned char SNARE = 38;
-unsigned char RIDE = 51;
+// Basic struct to handle input/instrument mapping
+struct Pad {
+  byte noteOn;
+  byte noteOff;
+  byte note;
+};
 
-unsigned char NOTE_OFF = 128;
-unsigned char NOTE_ON = 144;
-unsigned char PITCH = RIDE;
-unsigned char VELOCITY = 127;
+/* 
+ * Configurable stuff
+ */
 
-void setup()
-{
-  Serial.begin(115200);
+// Threshold value to read signal as a valid stroke.
+#define INPUT_SIGNAL_MINIMUN_STROKE 50
+
+// Silent time in millisecons an instrument should wait before.
+// be read his input again.
+#define PLAYED_AGAIN_WAITTIME_MILLISECS 100
+
+// Analog reads amount needed to define the best stroke.
+#define RESOLUTION_PASSES 32
+
+// Input / Instruments mapping
+Pad instruments[6] = {
+  {144, 128, 38}, // Snare
+  {145, 129, 51}, // Ride
+  {146, 130, 35}, // Bass Drum
+  {147, 131, 42}, // Closed Hi Hat
+  {148, 132, 50}, // High Tom
+  {149, 133, 41}  // Low Floor Tom
+};
+
+// Setup our program.
+// Notice that we are not using MIDI Baud Rate because we will be
+// broadcasting MIDI messages through Serial port that a computer
+// should recive and convert to real MIDI Input.
+void setup() {
+  Serial.begin(BAUD_RATE);
+  
+  // Faster Analog Read
+  // http://forum.arduino.cc/index.php/topic,6549.0.html
+  // defines for setting and clearing register bits
+  //
+  #define FASTADC 1
+  //
+  #ifndef cbi
+  #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+  #endif
+  #ifndef sbi
+  #define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+  #endif
+
+  // set prescale to 16
+  #if FASTADC
+  sbi(ADCSRA,ADPS2) ;
+  cbi(ADCSRA,ADPS1) ;
+  cbi(ADCSRA,ADPS0) ;
+  #endif
 }
 
-void loop()
-{
+// Last time offset an instrument has been played.
+unsigned long lastPlayedMillis = 0;
+
+void loop() {
+  
   int reading;
   
-  reading = analogRead(analogPin);
+  reading = readInstrument(0);
   
-  if(reading > 200)
-  {   
-      Msg(reading / 10);
+  if (reading > 0) {
+    // Reason behind is tunning performance based on the specific surface acting as a drum.
+    // We mesured we get rarely values higher than 127 bytes for velocity (Midi std), and we
+    // try to find a balance between Number of Analog Reads vs accurated values.
+    // 
+    // REFACTOR: This should be configurable as 'tunning the pag'
+    playInstrument(0, constrain(reading / 4, 0, 127)); 
+    
+    lastPlayedMillis = millis();
   }
-  
 }
 
-void Msg(byte data) 
-{
-    digitalWrite(outPin, HIGH);
-
-    Serial.write(NOTE_ON);
-    Serial.write(PITCH);
-    Serial.write(data);
-    delay(1);
-    Serial.write(NOTE_OFF);
-    Serial.write(PITCH);
-    Serial.write(data);
+// Reads analog port and determines if it is a valid keystroke or not
+int readInstrument(int analogPort) {
+  
+  // If we are not over passed silent time, we return unsuccessful.
+  if (millis() < lastPlayedMillis + PLAYED_AGAIN_WAITTIME_MILLISECS)
+    return -1;
+  
+  // Perform first Analog read.
+  int reading = analogRead(analogPort);
+  
+  // We are not over min stroke threshold?
+  if (reading < INPUT_SIGNAL_MINIMUN_STROKE)
+    return -1;
     
-    digitalWrite(outPin,LOW);
+  // Attempt to select best reading
+  int passes;
+    
+  while(passes < RESOLUTION_PASSES) {
+    int newReading = analogRead(analogPort);
+      
+    if (reading < newReading)
+      reading = newReading;
+        
+    passes++;
+  }
+    
+  return reading;
+}
+
+void debugInstrument(byte index, int velocity) {
+  turnLedOn();
+  Serial.println("Debug Instrument");
+  Serial.println(index);
+  Serial.println(instruments[index].noteOn);
+  Serial.println(velocity * 8);
+  turnLedOff();
+}
+
+void playInstrument(byte index, int velocity) {
+  turnLedOn();
+  midiMsg(instruments[index].noteOff, instruments[index].note, 127);
+  midiMsg(instruments[index].noteOn, instruments[index].note, velocity);
+  turnLedOff();
+}
+
+void turnLedOn() {
+  digitalWrite(LED_BUILTIN, HIGH);
+}
+
+void turnLedOff() {
+  digitalWrite(LED_BUILTIN, LOW);
+}
+
+void midiMsg(byte channel, byte note, byte velocity) {
+  Serial.write(channel);
+  Serial.write(note);
+  Serial.write(velocity);
 }
 
