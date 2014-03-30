@@ -20,10 +20,15 @@ struct Pad {
 
 // Silent time in millisecons an instrument should wait before.
 // be read his input again.
-#define PLAYED_AGAIN_WAITTIME_MILLISECS 100
+#define PLAYED_AGAIN_WAITTIME_MILLISECS 24
 
 // Analog reads amount needed to define the best stroke.
-#define RESOLUTION_PASSES 32
+#define RESOLUTION_PASSES 64
+
+// Signal (1024 max) will be divided for this number and the
+// result will be constrain to 127 max as it is the maximun
+// velocity value accepted by MIDI std.
+#define INPUT_SIGNAL_DIVISOR 8
 
 // Input / Instruments mapping
 Pad instruments[6] = {
@@ -73,18 +78,13 @@ void loop() {
   reading = readInstrument(0);
   
   if (reading > 0) {
-    // Reason behind is tunning performance based on the specific surface acting as a drum.
-    // We mesured we get rarely values higher than 127 bytes for velocity (Midi std), and we
-    // try to find a balance between Number of Analog Reads vs accurated values.
-    // 
-    // REFACTOR: This should be configurable as 'tunning the pag'
-    playInstrument(0, constrain(reading / 4, 0, 127)); 
-    
+    playInstrument(0, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127)); 
     lastPlayedMillis = millis();
   }
 }
 
-// Reads analog port and determines if it is a valid keystroke or not
+// Reads analog port and determines if it is a valid keystroke or not.
+// Will return -1 if a value couldn't be returned otherwise > 0 value.
 int readInstrument(int analogPort) {
   
   // If we are not over passed silent time, we return unsuccessful.
@@ -113,12 +113,11 @@ int readInstrument(int analogPort) {
   return reading;
 }
 
-void debugInstrument(byte index, int velocity) {
+void debugInstrument(byte index, int reading) {
   turnLedOn();
   Serial.println("Debug Instrument");
   Serial.println(index);
-  Serial.println(instruments[index].noteOn);
-  Serial.println(velocity * 8);
+  Serial.println(reading);
   turnLedOff();
 }
 
