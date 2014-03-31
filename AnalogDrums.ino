@@ -4,14 +4,6 @@
 // Output serial communication rate
 #define BAUD_RATE 115200
 
-// Basic struct to handle input/instrument mapping
-struct Pad {
-  byte noteOn;
-  byte noteOff;
-  byte note;
-  unsigned long lastPlayedMillis;
-};
-
 /* 
  * Configurable stuff
  */
@@ -31,14 +23,25 @@ struct Pad {
 // velocity value accepted by MIDI std.
 #define INPUT_SIGNAL_DIVISOR 8
 
+// Basic struct to handle input/instrument mapping
+struct Pad {
+  byte noteOn;
+  byte noteOff;
+  byte note;
+  unsigned long lastPlayedMillis;
+  int readingPasses;
+  int bestReading;
+  bool isSeekingBestStroke;
+};
+
 // Input / Instruments mapping
 Pad instruments[6] = {
-  {144, 128, 38, 0}, // Snare
-  {145, 129, 51, 0}, // Ride
-  {146, 130, 35, 0}, // Bass Drum
-  {147, 131, 42, 0}, // Closed Hi Hat
-  {148, 132, 50, 0}, // High Tom
-  {149, 133, 41, 0}  // Low Floor Tom
+  {144, 128, 38, 0, 0, 0, false}, // Snare
+  {145, 129, 51, 0, 0, 0, false}, // Ride
+  {146, 130, 35, 0, 0, 0, false}, // Bass Drum
+  {147, 131, 42, 0, 0, 0, false}, // Closed Hi Hat
+  {148, 132, 50, 0, 0, 0, false}, // High Tom
+  {149, 133, 41, 0, 0, 0, false}  // Low Floor Tom
 };
 
 // Setup our program.
@@ -84,38 +87,35 @@ void loop() {
   }
 }
 
-int readInputInstrument(int analogPort, int instrumentIndex) {
-  // If we are not over passed silent time, we return unsuccessful.
-  if (millis() < instruments[instrumentIndex].lastPlayedMillis + PLAYED_AGAIN_WAITTIME_MILLISECS)
-    return -1;
-    
-  return readInput(analogPort);
-}
-
 // Reads analog port and determines if it is a valid keystroke or not.
 // Will return -1 if a value couldn't be returned otherwise > 0 value.
-int readInput(int analogPort) {
-    
+int readInputInstrument(int analogPort, int instrumentIndex) {
+
+  Pad *pInstrument = &instruments[instrumentIndex];
+
+  // If we are not over passed silent time, we return unsuccessful.
+  if (millis() < pInstrument->lastPlayedMillis + PLAYED_AGAIN_WAITTIME_MILLISECS)
+    return -1;
+
   // Perform first Analog read.
   int reading = analogRead(analogPort);
   
   // We are not over min stroke threshold?
-  if (reading < INPUT_SIGNAL_MINIMUN_STROKE)
+  if (pInstrument->isSeekingBestStroke == false && reading < INPUT_SIGNAL_MINIMUN_STROKE) {
     return -1;
-    
-  // Attempt to select best reading
-  int passes;
-    
-  while(passes < RESOLUTION_PASSES) {
-    int newReading = analogRead(analogPort);
-      
-    if (reading < newReading)
-      reading = newReading;
-        
-    passes++;
+  } else {
+    pInstrument->readingPasses++;
+    //Serial.println(pInstrument->readingPasses);
   }
+
+  // Attempt to select best reading
+  if (reading > pInstrument->bestReading)
+    pInstrument->bestReading = reading;
     
-  return reading;
+  if (pInstrument->readingPasses >= RESOLUTION_PASSES)
+    return pInstrument->bestReading;
+  else
+    return -1;
 }
 
 void debugInstrument(byte index, int reading) {
@@ -131,6 +131,9 @@ void playInstrument(int index, int velocity) {
   midiMsg(instruments[index].noteOff, instruments[index].note, 127);
   midiMsg(instruments[index].noteOn, instruments[index].note, velocity);
   instruments[index].lastPlayedMillis = millis();
+  instruments[index].readingPasses = 0;
+  instruments[index].bestReading = 0;
+  instruments[index].isSeekingBestStroke = false;
   turnLedOff();
 }
 
