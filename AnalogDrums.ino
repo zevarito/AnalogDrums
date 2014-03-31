@@ -9,6 +9,7 @@ struct Pad {
   byte noteOn;
   byte noteOff;
   byte note;
+  unsigned long lastPlayedMillis;
 };
 
 /* 
@@ -16,7 +17,7 @@ struct Pad {
  */
 
 // Threshold value to read signal as a valid stroke.
-#define INPUT_SIGNAL_MINIMUN_STROKE 50
+#define INPUT_SIGNAL_MINIMUN_STROKE 100
 
 // Silent time in millisecons an instrument should wait before.
 // be read his input again.
@@ -32,12 +33,12 @@ struct Pad {
 
 // Input / Instruments mapping
 Pad instruments[6] = {
-  {144, 128, 38}, // Snare
-  {145, 129, 51}, // Ride
-  {146, 130, 35}, // Bass Drum
-  {147, 131, 42}, // Closed Hi Hat
-  {148, 132, 50}, // High Tom
-  {149, 133, 41}  // Low Floor Tom
+  {144, 128, 38, 0}, // Snare
+  {145, 129, 51, 0}, // Ride
+  {146, 130, 35, 0}, // Bass Drum
+  {147, 131, 42, 0}, // Closed Hi Hat
+  {148, 132, 50, 0}, // High Tom
+  {149, 133, 41, 0}  // Low Floor Tom
 };
 
 // Setup our program.
@@ -68,29 +69,33 @@ void setup() {
   #endif
 }
 
-// Last time offset an instrument has been played.
-unsigned long lastPlayedMillis = 0;
-
 void loop() {
   
   int reading;
   
-  reading = readInstrument(0);
+  reading = readInputInstrument(0, 3);
+  if (reading > 0) {
+    playInstrument(3, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
+  }
   
+  reading = readInputInstrument(5, 0);
   if (reading > 0) {
     playInstrument(0, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127)); 
-    lastPlayedMillis = millis();
   }
+}
+
+int readInputInstrument(int analogPort, int instrumentIndex) {
+  // If we are not over passed silent time, we return unsuccessful.
+  if (millis() < instruments[instrumentIndex].lastPlayedMillis + PLAYED_AGAIN_WAITTIME_MILLISECS)
+    return -1;
+    
+  return readInput(analogPort);
 }
 
 // Reads analog port and determines if it is a valid keystroke or not.
 // Will return -1 if a value couldn't be returned otherwise > 0 value.
-int readInstrument(int analogPort) {
-  
-  // If we are not over passed silent time, we return unsuccessful.
-  if (millis() < lastPlayedMillis + PLAYED_AGAIN_WAITTIME_MILLISECS)
-    return -1;
-  
+int readInput(int analogPort) {
+    
   // Perform first Analog read.
   int reading = analogRead(analogPort);
   
@@ -121,10 +126,11 @@ void debugInstrument(byte index, int reading) {
   turnLedOff();
 }
 
-void playInstrument(byte index, int velocity) {
+void playInstrument(int index, int velocity) {
   turnLedOn();
   midiMsg(instruments[index].noteOff, instruments[index].note, 127);
   midiMsg(instruments[index].noteOn, instruments[index].note, velocity);
+  instruments[index].lastPlayedMillis = millis();
   turnLedOff();
 }
 
