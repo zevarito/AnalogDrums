@@ -34,6 +34,10 @@ struct Pad {
   bool isSeekingBestStroke;
 };
 
+// Function headers
+int readInputInstrument(int analogPort, Pad *pInstrument);
+void playInstrument(Pad *pInstrument, int velocity);
+
 // Input / Instruments mapping
 Pad instruments[6] = {
   {144, 128, 38, 0, 0, 0, false}, // Snare
@@ -75,23 +79,22 @@ void setup() {
 void loop() {
   
   int reading;
+  Pad *pInstrument;
+ 
+  pInstrument = &instruments[3];
+  reading = readInputInstrument(0, pInstrument);
+  if (reading > 0)
+    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
   
-  reading = readInputInstrument(0, 3);
-  if (reading > 0) {
-    playInstrument(3, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
-  }
-  
-  reading = readInputInstrument(5, 0);
-  if (reading > 0) {
-    playInstrument(0, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127)); 
-  }
+  pInstrument = &instruments[0];
+  reading = readInputInstrument(5, pInstrument);
+  if (reading > 0)
+    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127)); 
 }
 
 // Reads analog port and determines if it is a valid keystroke or not.
 // Will return -1 if a value couldn't be returned otherwise > 0 value.
-int readInputInstrument(int analogPort, int instrumentIndex) {
-
-  Pad *pInstrument = &instruments[instrumentIndex];
+int readInputInstrument(int analogPort, Pad *pInstrument) {
 
   // If we are not over passed silent time, we return unsuccessful.
   if (millis() < pInstrument->lastPlayedMillis + PLAYED_AGAIN_WAITTIME_MILLISECS)
@@ -105,7 +108,6 @@ int readInputInstrument(int analogPort, int instrumentIndex) {
     return -1;
   } else {
     pInstrument->readingPasses++;
-    //Serial.println(pInstrument->readingPasses);
   }
 
   // Attempt to select best reading
@@ -118,22 +120,19 @@ int readInputInstrument(int analogPort, int instrumentIndex) {
     return -1;
 }
 
-void debugInstrument(byte index, int reading) {
+void playInstrument(Pad *pInstrument, int velocity) {
   turnLedOn();
-  Serial.println("Debug Instrument");
-  Serial.println(index);
-  Serial.println(reading);
-  turnLedOff();
-}
-
-void playInstrument(int index, int velocity) {
-  turnLedOn();
-  midiMsg(instruments[index].noteOff, instruments[index].note, 127);
-  midiMsg(instruments[index].noteOn, instruments[index].note, velocity);
-  instruments[index].lastPlayedMillis = millis();
-  instruments[index].readingPasses = 0;
-  instruments[index].bestReading = 0;
-  instruments[index].isSeekingBestStroke = false;
+  
+  // Send MIDI output message, first off then on.
+  midiMsg(pInstrument->noteOff, pInstrument->note, 127);
+  midiMsg(pInstrument->noteOn, pInstrument->note, velocity);
+  
+  // Reset note
+  pInstrument->lastPlayedMillis = millis();
+  pInstrument->readingPasses = 0;
+  pInstrument->bestReading = 0;
+  pInstrument->isSeekingBestStroke = false;
+  
   turnLedOff();
 }
 
