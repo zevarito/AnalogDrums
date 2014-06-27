@@ -66,15 +66,36 @@ void loop() {
   int reading;
   Pad *pInstrument;
  
-  pInstrument = &instruments[3];
+  pInstrument = &instruments[6];
   reading = readInputInstrument(0, pInstrument);
   if (reading > 0)
     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
-  
+
+  pInstrument = &instruments[2];
+  reading = readInputInstrument(1, pInstrument);
+  if (reading > 0)
+    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
+
   pInstrument = &instruments[0];
+  reading = readInputInstrument(2, pInstrument);
+  if (reading > 0)
+     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
+
+  pInstrument = &instruments[3];
+  reading = readInputInstrument(3, pInstrument);
+  if (reading > 0)
+    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
+
+  pInstrument = &instruments[5];
+  reading = readInputInstrument(4, pInstrument);
+  if (reading > 0)
+    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
+
+  pInstrument = &instruments[1];
   reading = readInputInstrument(5, pInstrument);
   if (reading > 0)
     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127)); 
+
 }
 
 // Reads analog port and determines if it is a valid keystroke or not.
