@@ -117,8 +117,10 @@ int readInputInstrument(int analogPort, Pad *pInstrument) {
   }
 
   // Attempt to select best reading
-  if (reading > pInstrument->bestReading)
+  if (reading > pInstrument->bestReading) {
     pInstrument->bestReading = reading;
+    pInstrument->isSeekingBestStroke = true;
+  }
     
   if (pInstrument->readingPasses >= RESOLUTION_PASSES)
     return pInstrument->bestReading;
