@@ -48,32 +48,16 @@ Pad instruments[6] = {
   {149, 133, 41, 0, 0, 0, false}  // Low Floor Tom
 };
 
+#ifndef LED_BUILTIN
+static const uint8_t LED_BUILTIN = 13;
+#endif
+
 // Setup our program.
 // Notice that we are not using MIDI Baud Rate because we will be
 // broadcasting MIDI messages through Serial port that a computer
 // should recive and convert to real MIDI Input.
 void setup() {
   Serial.begin(BAUD_RATE);
-  
-  // Faster Analog Read
-  // http://forum.arduino.cc/index.php/topic,6549.0.html
-  // defines for setting and clearing register bits
-  //
-  #define FASTADC 1
-  //
-  #ifndef cbi
-  #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
-  #endif
-  #ifndef sbi
-  #define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
-  #endif
-
-  // set prescale to 16
-  #if FASTADC
-  sbi(ADCSRA,ADPS2) ;
-  cbi(ADCSRA,ADPS1) ;
-  cbi(ADCSRA,ADPS0) ;
-  #endif
 }
 
 void loop() {
