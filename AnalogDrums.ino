@@ -32,6 +32,7 @@ struct Pad {
   int readingPasses;
   int bestReading;
   bool isSeekingBestStroke;
+  float velocityMultiplier;
 };
 
 // Function headers
@@ -40,13 +41,13 @@ void playInstrument(Pad *pInstrument, int velocity);
 
 // Input / Instruments mapping
 Pad instruments[7] = {
-  {144, 128, 38, 0, 0, 0, false}, // Snare
-  {145, 129, 51, 0, 0, 0, false}, // Ride
-  {146, 130, 35, 0, 0, 0, false}, // Bass Drum
-  {147, 131, 42, 0, 0, 0, false}, // Closed Hi Hat
-  {148, 132, 50, 0, 0, 0, false}, // High Tom
-  {149, 133, 41, 0, 0, 0, false},  // Low Floor Tom
-  {150, 134, 49, 0, 0, 0, false}  // Crash
+  {144, 128, 38, 0, 0, 0, false, 1.2}, // Snare
+  {145, 129, 51, 0, 0, 0, false, 1.2}, // Ride
+  {146, 130, 35, 0, 0, 0, false, 1.1}, // Bass Drum
+  {147, 131, 42, 0, 0, 0, false, 1.2}, // Closed Hi Hat
+  {148, 132, 50, 0, 0, 0, false, 1.2}, // High Tom
+  {149, 133, 41, 0, 0, 0, false, 1.2}, // Low Floor Tom
+  {150, 134, 49, 0, 0, 0, false, 1.2}  // Crash
 };
 
 #ifndef LED_BUILTIN
@@ -133,7 +134,7 @@ void playInstrument(Pad *pInstrument, int velocity) {
   
   // Send MIDI output message, first off then on.
   midiMsg(pInstrument->noteOff, pInstrument->note, 127);
-  midiMsg(pInstrument->noteOn, pInstrument->note, velocity);
+  midiMsg(pInstrument->noteOn, pInstrument->note, (float)velocity * pInstrument->velocityMultiplier);
   
   // Reset note
   pInstrument->lastPlayedMillis = millis();
