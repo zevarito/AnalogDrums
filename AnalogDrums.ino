@@ -9,14 +9,14 @@
  */
 
 // Threshold value to read signal as a valid stroke.
-#define INPUT_SIGNAL_MINIMUN_STROKE 100
+#define INPUT_SIGNAL_MINIMUN_STROKE 15
 
 // Silent time in millisecons an instrument should wait before.
 // be read his input again.
-#define PLAYED_AGAIN_WAITTIME_MILLISECS 24
+#define PLAYED_AGAIN_WAITTIME_MILLISECS 1
 
 // Analog reads amount needed to define the best stroke.
-#define RESOLUTION_PASSES 64
+#define RESOLUTION_PASSES 1
 
 // Signal (1024 max) will be divided for this number and the
 // result will be constrain to 127 max as it is the maximun
@@ -33,25 +33,35 @@ struct Pad {
   int bestReading;
   bool isSeekingBestStroke;
   float velocityMultiplier;
+  int waitTimeMillis;
 };
 
 // Function headers
 int readInputInstrument(int analogPort, Pad *pInstrument);
+void resetInstrument(Pad *pInstrument);
 void playInstrument(Pad *pInstrument, int velocity);
 
 // Input / Instruments mapping
 Pad instruments[7] = {
-  {144, 128, 38, 0, 0, 0, false, 1.2}, // Snare
-  {145, 129, 51, 0, 0, 0, false, 1.2}, // Ride
-  {146, 130, 35, 0, 0, 0, false, 1.1}, // Bass Drum
-  {147, 131, 42, 0, 0, 0, false, 1.2}, // Closed Hi Hat
-  {148, 132, 50, 0, 0, 0, false, 1.2}, // High Tom
-  {149, 133, 41, 0, 0, 0, false, 1.2}, // Low Floor Tom
-  {150, 134, 49, 0, 0, 0, false, 1.2}  // Crash
+  {144, 128, 38, 0, 0, 0, false, 1.4, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Snare
+  {145, 129, 51, 0, 0, 0, false, 1.3, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Ride
+  {146, 130, 35, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Bass Drum
+  {147, 131, 42, 0, 0, 0, false, 1.2, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Closed Hi Hat
+  {148, 132, 50, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS}, // High Tom
+  {149, 133, 41, 0, 0, 0, false, 1.0, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Low Floor Tom
+  {150, 134, 49, 0, 0, 0, false, 1.6, PLAYED_AGAIN_WAITTIME_MILLISECS}  // Crash
 };
 
+#define SNARE  0
+#define RIDE   1
+#define BDRUM  2
+#define CHIHAT 3
+#define HITOM  4
+#define LFTOM  5
+#define CRASH  6
+
 #ifndef LED_BUILTIN
-static const uint8_t LED_BUILTIN = 13;
+//static const uint8_t LED_BUILTIN = 13;
 #endif
 
 // Setup our program.
@@ -67,32 +77,32 @@ void loop() {
   int reading;
   Pad *pInstrument;
  
-  pInstrument = &instruments[6];
+  pInstrument = &instruments[BDRUM];
   reading = readInputInstrument(0, pInstrument);
   if (reading > 0)
     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
 
-  pInstrument = &instruments[2];
+  pInstrument = &instruments[CHIHAT];
   reading = readInputInstrument(1, pInstrument);
   if (reading > 0)
     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
 
-  pInstrument = &instruments[0];
+  pInstrument = &instruments[SNARE];
   reading = readInputInstrument(2, pInstrument);
   if (reading > 0)
-     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
+    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
 
-  pInstrument = &instruments[3];
+  pInstrument = &instruments[RIDE];
   reading = readInputInstrument(3, pInstrument);
   if (reading > 0)
     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
 
-  pInstrument = &instruments[5];
+  pInstrument = &instruments[CRASH];
   reading = readInputInstrument(4, pInstrument);
   if (reading > 0)
     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
 
-  pInstrument = &instruments[1];
+  pInstrument = &instruments[HITOM];
   reading = readInputInstrument(5, pInstrument);
   if (reading > 0)
     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127)); 
@@ -104,29 +114,42 @@ void loop() {
 int readInputInstrument(int analogPort, Pad *pInstrument) {
 
   // If we are not over passed silent time, we return unsuccessful.
-  if (millis() < pInstrument->lastPlayedMillis + PLAYED_AGAIN_WAITTIME_MILLISECS)
+  if (pInstrument->isSeekingBestStroke || millis() > pInstrument->lastPlayedMillis + pInstrument->waitTimeMillis)
+    pInstrument->isSeekingBestStroke = true;
+  else
     return -1;
-
+    
   // Perform first Analog read.
   int reading = analogRead(analogPort);
   
+  pInstrument->readingPasses++;
+  
   // We are not over min stroke threshold?
-  if (pInstrument->isSeekingBestStroke == false && reading < INPUT_SIGNAL_MINIMUN_STROKE) {
+  if (reading < INPUT_SIGNAL_MINIMUN_STROKE)
     return -1;
-  } else {
-    pInstrument->readingPasses++;
-  }
 
   // Attempt to select best reading
   if (reading > pInstrument->bestReading) {
     pInstrument->bestReading = reading;
-    pInstrument->isSeekingBestStroke = true;
   }
     
-  if (pInstrument->readingPasses >= RESOLUTION_PASSES)
-    return pInstrument->bestReading;
+  if (pInstrument->readingPasses >= RESOLUTION_PASSES) {
+    if (pInstrument->bestReading >= INPUT_SIGNAL_MINIMUN_STROKE) {
+      return pInstrument->bestReading;
+    } else {
+      resetInstrument(pInstrument);
+      return -1;
+    }
+  }
   else
     return -1;
+}
+
+void resetInstrument(Pad *pInstrument) {
+  pInstrument->lastPlayedMillis = millis();
+  pInstrument->readingPasses = 0;
+  pInstrument->bestReading = 0;
+  pInstrument->isSeekingBestStroke = false;
 }
 
 void playInstrument(Pad *pInstrument, int velocity) {
@@ -136,11 +159,7 @@ void playInstrument(Pad *pInstrument, int velocity) {
   midiMsg(pInstrument->noteOff, pInstrument->note, 127);
   midiMsg(pInstrument->noteOn, pInstrument->note, (float)velocity * pInstrument->velocityMultiplier);
   
-  // Reset note
-  pInstrument->lastPlayedMillis = millis();
-  pInstrument->readingPasses = 0;
-  pInstrument->bestReading = 0;
-  pInstrument->isSeekingBestStroke = false;
+  resetInstrument(pInstrument);
   
   turnLedOff();
 }
