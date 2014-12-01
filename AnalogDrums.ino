@@ -1,5 +1,9 @@
-
 #define DEBUG 0
+
+#if DEBUG
+long lastMillis = 0;
+long loops = 0;
+#endif
 
 // Output serial communication rate
 #define BAUD_RATE 115200
@@ -9,11 +13,11 @@
  */
 
 // Threshold value to read signal as a valid stroke.
-#define INPUT_SIGNAL_MINIMUN_STROKE 15
+#define INPUT_SIGNAL_MINIMUN_STROKE 10
 
 // Silent time in millisecons an instrument should wait before.
 // be read his input again.
-#define PLAYED_AGAIN_WAITTIME_MILLISECS 1
+#define PLAYED_AGAIN_WAITTIME_MILLISECS 24
 
 // Analog reads amount needed to define the best stroke.
 #define RESOLUTION_PASSES 1
@@ -43,13 +47,13 @@ void playInstrument(Pad *pInstrument, int velocity);
 
 // Input / Instruments mapping
 Pad instruments[7] = {
-  {144, 128, 38, 0, 0, 0, false, 1.4, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Snare
-  {145, 129, 51, 0, 0, 0, false, 1.3, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Ride
+  {144, 128, 38, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Snare
+  {145, 129, 51, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Ride
   {146, 130, 35, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Bass Drum
-  {147, 131, 42, 0, 0, 0, false, 1.2, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Closed Hi Hat
+  {147, 131, 42, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Closed Hi Hat
   {148, 132, 50, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS}, // High Tom
-  {149, 133, 41, 0, 0, 0, false, 1.0, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Low Floor Tom
-  {150, 134, 49, 0, 0, 0, false, 1.6, PLAYED_AGAIN_WAITTIME_MILLISECS}  // Crash
+  {149, 133, 41, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS}, // Low Floor Tom
+  {150, 134, 49, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS}  // Crash
 };
 
 #define SNARE  0
@@ -72,41 +76,48 @@ void setup() {
   Serial.begin(BAUD_RATE);
 }
 
+byte INPUT_INSTRUMENT_READING_LOOP[6][2] = {
+  {0, BDRUM},
+  {1, CHIHAT},
+  {2, SNARE},
+  {3, RIDE},
+  {4, SNARE},
+  {5, RIDE},
+};
+
+int currentInputInstrumentIndex = 0;
+
 void loop() {
+  
+  #if DEBUG
+    long currentMillis = millis();
+    loops++;
+  #endif
   
   int reading;
   Pad *pInstrument;
- 
-  pInstrument = &instruments[BDRUM];
-  reading = readInputInstrument(0, pInstrument);
-  if (reading > 0)
-    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
-
-  pInstrument = &instruments[CHIHAT];
-  reading = readInputInstrument(1, pInstrument);
-  if (reading > 0)
-    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
-
-  pInstrument = &instruments[SNARE];
-  reading = readInputInstrument(2, pInstrument);
-  if (reading > 0)
-    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
-
-  pInstrument = &instruments[RIDE];
-  reading = readInputInstrument(3, pInstrument);
-  if (reading > 0)
-    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
-
-  pInstrument = &instruments[CRASH];
-  reading = readInputInstrument(4, pInstrument);
-  if (reading > 0)
-    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
-
-  pInstrument = &instruments[HITOM];
-  reading = readInputInstrument(5, pInstrument);
-  if (reading > 0)
-    playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127)); 
-
+  
+  currentInputInstrumentIndex = 0;
+  
+  while(currentInputInstrumentIndex<6) {
+    pInstrument = &instruments[INPUT_INSTRUMENT_READING_LOOP[currentInputInstrumentIndex][1]];
+    reading = readInputInstrument(INPUT_INSTRUMENT_READING_LOOP[currentInputInstrumentIndex][0], pInstrument);
+    if (reading > 0)
+      playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 0, 127));
+    
+     currentInputInstrumentIndex++;
+    
+  }
+  
+  #if DEBUG
+    if(currentMillis - lastMillis > 1000){
+      Serial.print("Loops last second:");
+      Serial.println(loops);
+    
+      lastMillis = currentMillis;
+      loops = 0;
+    }
+  #endif
 }
 
 // Reads analog port and determines if it is a valid keystroke or not.
