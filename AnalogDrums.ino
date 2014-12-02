@@ -167,9 +167,13 @@ void readInputAndPlay(int index) {
 // Reads analog port and determines if it is a valid keystroke or not.
 // Will return -1 if a value couldn't be returned otherwise > 0 value.
 int readInputInstrument(int analogPort, Pad *pInstrument) {
+  
+  // We are not over min stroke threshold?
+  if (reading < INPUT_SIGNAL_MINIMUN_STROKE && !pInstrument->isSeekingBestStroke)
+    return -1;
     
   // If we are not over passed silent time, we return unsuccessful.
-  if (millis() > pInstrument->lastPlayedMillis + pInstrument->waitTimeMillis)
+  if (pInstrument->isSeekingBestStroke || millis() > pInstrument->lastPlayedMillis + pInstrument->waitTimeMillis)
     pInstrument->isSeekingBestStroke = true;
   else
     return -1;
@@ -178,10 +182,6 @@ int readInputInstrument(int analogPort, Pad *pInstrument) {
   int reading = analogRead(analogPort);
   
   pInstrument->readingPasses++;
-  
-  // We are not over min stroke threshold?
-  if (reading < INPUT_SIGNAL_MINIMUN_STROKE)
-    return -1;
 
   // Attempt to select best reading
   if (reading > pInstrument->bestReading) {
