@@ -29,10 +29,10 @@ long loops = 0;
 
 // Silent time in millisecons an instrument should wait before.
 // be read his input again.
-#define PLAYED_AGAIN_WAITTIME_MILLISECS 16
+#define PLAYED_AGAIN_WAITTIME_MILLISECS 4
 
 // Analog reads amount needed to define the best stroke.
-#define RESOLUTION_PASSES 32
+#define RESOLUTION_PASSES 2
 
 // Signal (1024 max) will be divided for this number and the
 // result will be constrain to 127 max as it is the maximun
@@ -61,12 +61,12 @@ void readInputAndPlay(int index);
 
 // Input / Instruments mapping
 Pad instruments[7] = {
-  {144, 128, 38, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Snare
-  {145, 129, 51, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Ride
-  {146, 130, 35, 0, 0, 0, false, 1.6, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Bass Drum
-  {147, 131, 42, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Closed Hi Hat
+  {144, 128, 38, 0, 0, 0, false, 1.9, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Snare
+  {145, 129, 51, 0, 0, 0, false, 1.7, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Ride
+  {146, 130, 35, 0, 0, 0, false, 1.5, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Bass Drum
+  {147, 131, 42, 0, 0, 0, false, 1.9, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Closed Hi Hat
   {148, 132, 50, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // High Tom
-  {149, 133, 41, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Low Floor Tom
+  {149, 133, 41, 0, 0, 0, false, 1.7, PLAYED_AGAIN_WAITTIME_MILLISECS, false}, // Low Floor Tom
   {150, 134, 49, 0, 0, 0, false, 1.8, PLAYED_AGAIN_WAITTIME_MILLISECS, false}  // Crash
 };
 
@@ -82,24 +82,25 @@ Pad instruments[7] = {
 //static const uint8_t LED_BUILTIN = 13;
 #endif
 
+int currentInputInstrumentIndex;
+
+byte INPUT_INSTRUMENT_READING_LOOP[6][2] = {
+  {0, BDRUM},
+  {1, CRASH},
+  {2, LFTOM},
+  {3, RIDE},
+  {4, SNARE},
+  {5, CHIHAT},
+};
+
 // Setup our program.
 // Notice that we are not using MIDI Baud Rate because we will be
 // broadcasting MIDI messages through Serial port that a computer
 // should recive and convert to real MIDI Input.
 void setup() {
   Serial.begin(BAUD_RATE);
+  currentInputInstrumentIndex = 0;
 }
-
-byte INPUT_INSTRUMENT_READING_LOOP[6][2] = {
-  {0, BDRUM},
-  {1, CRASH},
-  {2, SNARE},
-  {3, RIDE},
-  {4, SNARE},
-  {5, CHIHAT},
-};
-
-int currentInputInstrumentIndex = 0;
 
 void loop() {
   
@@ -117,12 +118,22 @@ void loop() {
   }
   */
  
-  // Method: One in a loop
-  readInputAndPlay(currentInputInstrumentIndex);
-  if (currentInputInstrumentIndex == 5)
-    currentInputInstrumentIndex = 0;
-  else
+  // Method: One intrument per loop
+  if (currentInputInstrumentIndex <= 5) {
+    readInputAndPlay(currentInputInstrumentIndex);
     currentInputInstrumentIndex++;
+  } else {
+    currentInputInstrumentIndex = 0;
+  }
+  
+  // Method: All intruments per loop
+  /*
+  currentInputInstrumentIndex = 0;
+  while (currentInputInstrumentIndex <= 5) {
+    readInputAndPlay(currentInputInstrumentIndex);
+    currentInputInstrumentIndex++; 
+  }
+  */
   
   #if DEBUG
     if(currentMillis - lastMillis > 1000){
@@ -141,12 +152,14 @@ void readInputAndPlay(int index) {
   
   pInstrument = &instruments[INPUT_INSTRUMENT_READING_LOOP[index][1]];
   
+  // If thist note has been played for more than 300ms we send a note-off midi msg.
+  //if (pInstrument->isPlaying && millis() > pInstrument->lastPlayedMillis + 300) {
+  //  midiMsg(pInstrument->noteOff, pInstrument->note, 0);
+  //  pInstrument->isPlaying = false;
+  //}
+  
   reading = readInputInstrument(INPUT_INSTRUMENT_READING_LOOP[index][0], pInstrument);
   if (reading > 0) {
-    if (pInstrument->isPlaying) {
-      midiMsg(pInstrument->noteOn, pInstrument->note, 0);
-      pInstrument->isPlaying = false;
-    }
     playInstrument(pInstrument, constrain(reading / INPUT_SIGNAL_DIVISOR, 40, 127));
   }
 }
@@ -154,9 +167,9 @@ void readInputAndPlay(int index) {
 // Reads analog port and determines if it is a valid keystroke or not.
 // Will return -1 if a value couldn't be returned otherwise > 0 value.
 int readInputInstrument(int analogPort, Pad *pInstrument) {
-
+    
   // If we are not over passed silent time, we return unsuccessful.
-  if (pInstrument->isSeekingBestStroke || millis() > pInstrument->lastPlayedMillis + pInstrument->waitTimeMillis)
+  if (millis() > pInstrument->lastPlayedMillis + pInstrument->waitTimeMillis)
     pInstrument->isSeekingBestStroke = true;
   else
     return -1;
@@ -196,6 +209,12 @@ void resetInstrument(Pad *pInstrument) {
 
 void playInstrument(Pad *pInstrument, int velocity) {
   turnLedOn();
+  
+  // Silent if is playing before play again
+  if (pInstrument->isPlaying) {
+    midiMsg(pInstrument->noteOff, pInstrument->note, 0);
+    pInstrument->isPlaying = false;
+  }
   
   velocity = (float)velocity * pInstrument->velocityMultiplier;
     
